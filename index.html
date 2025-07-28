@@ -74,7 +74,7 @@
 
                 <div id="loader-container" class="mt-6 flex justify-center items-center hidden">
                     <div class="loader"></div>
-                    <p class="ml-4 text-gray-600">Running simulation...</p>
+                    <p id="loader-text" class="ml-4 text-gray-600">Running simulation...</p>
                 </div>
             </div>
 
@@ -101,43 +101,22 @@
         </div>
     </div>
 
-    <script type="module">
-        // --- Matrix Library (Simple) ---
-        // Basic matrix operations needed for ELM
+    <!-- This script tag contains the code for our Web Worker. -->
+    <!-- In a real project, this would be in a separate worker.js file. -->
+    <script id="worker" type="javascript/worker">
+        // --- Web Worker Code ---
+        // This code runs in a separate thread and does all the heavy lifting.
+
+        // We need to import the numeric library inside the worker
+        self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js');
+
         const mat = {
-            dot: (A, B) => {
-                const m = A.length;
-                const n = A[0].length;
-                const p = B[0].length;
-                if (n !== B.length) throw new Error("Matrix dimensions are not compatible for dot product.");
-                const C = Array(m).fill(0).map(() => Array(p).fill(0));
-                for (let i = 0; i < m; i++) {
-                    for (let j = 0; j < p; j++) {
-                        for (let k = 0; k < n; k++) {
-                            C[i][j] += A[i][k] * B[k][j];
-                        }
-                    }
-                }
-                return C;
-            },
-            transpose: (A) => {
-                const m = A.length;
-                const n = A[0].length;
-                const B = Array(n).fill(0).map(() => Array(m).fill(0));
-                for (let i = 0; i < m; i++) {
-                    for (let j = 0; j < n; j++) {
-                        B[j][i] = A[i][j];
-                    }
-                }
-                return B;
-            },
-            add: (A, B) => A.map((row, i) => row.map((val, j) => val + B[i][j])),
-            // Simplified inverse using external library would be better, but for demo we use a simplified approach
-            // NOTE: A full linear algebra library (like math.js) is recommended for a robust implementation of inv()
-            // This is a placeholder for the concept. The actual calculation is done via `calculate_output_weights`
+            dot: (A, B) => numeric.dot(A, B),
+            transpose: (A) => numeric.transpose(A),
+            add: (A, B) => numeric.add(A, B),
+            inv: (A) => numeric.inv(A)
         };
 
-        // --- Activation Functions ---
         const ACTIVATION_FUNCTIONS = {
             sigmoid: (x) => 1 / (1 + Math.exp(-x)),
             tanh: (x) => Math.tanh(x),
@@ -145,125 +124,30 @@
             gaussian: (x) => Math.exp(-x * x)
         };
 
-        // --- UI Elements ---
-        const experimentTypeSelect = document.getElementById('experimentType');
-        const activationFunctionSelect = document.getElementById('activationFunction');
-        const hiddenNeuronsSlider = document.getElementById('hiddenNeurons');
-        const upsamplingFactorSlider = document.getElementById('upsamplingFactor');
-        const neuronsValueSpan = document.getElementById('neurons-value');
-        const upsamplingValueSpan = document.getElementById('upsampling-value');
-        const runExperimentBtn = document.getElementById('runExperiment');
-        const neuronsControl = document.getElementById('neurons-control');
-        const upsamplingControl = document.getElementById('upsampling-control');
-        const loader = document.getElementById('loader-container');
-        const resultsLog = document.getElementById('results-log');
-        const predictedLabelSpan = document.getElementById('predictedLabel');
-        const actualLabelSpan = document.getElementById('actualLabel');
-        const digitCanvas = document.getElementById('digitCanvas');
-        const digitCtx = digitCanvas.getContext('2d');
-
-        // --- Chart.js Setup ---
-        const chartCtx = document.getElementById('accuracyChart').getContext('2d');
-        let accuracyChart = new Chart(chartCtx, {
-            type: 'bar',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Test Accuracy',
-                    data: [],
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        title: { display: true, text: 'Accuracy (%)' }
-                    }
-                },
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    title: { display: true, text: 'Experiment Results' }
-                }
-            }
-        });
-
-        // --- Data Loading and Prep ---
-        let mnistData = null;
-        async function loadData() {
-            // This now fetches the data file from the same directory as the index.html
-            // You must create a 'mnist_subset.json' file and place it in your repository.
-            try {
-                const response = await fetch('./mnist_subset.json');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}. Make sure 'mnist_subset.json' is in your repository.`);
-                }
-                mnistData = await response.json();
-                log("Local MNIST data loaded successfully.");
-            } catch (error) {
-                log(`Error loading local data: ${error.message}`, 'error');
-                log("Please ensure 'mnist_subset.json' exists in the same folder as your index.html on GitHub.", 'error');
-            }
-        }
-
-        function getPreparedData() {
-            const trainImages = mnistData.train_images.map(img => img.map(p => p / 255.0));
-            const testImages = mnistData.test_images.map(img => img.map(p => p / 255.0));
-            const trainLabels = mnistData.train_labels;
-            const testLabels = mnistData.test_labels;
-
-            // One-hot encode labels
-            const T_train = trainLabels.map(label => {
-                const arr = Array(10).fill(0);
-                arr[label] = 1;
-                return arr;
-            });
-
-            return { trainImages, T_train, testImages, testLabels };
-        }
-
-        // --- Core ELM Logic ---
         function calculate_output_weights(H, T_train, C = 1e-5) {
-            // This is a simplified JS implementation of the regularized least squares
             const Ht = mat.transpose(H);
             const HtH = mat.dot(Ht, H);
-            const identity = Array(HtH.length).fill(0).map((_, i) =>
-                Array(HtH.length).fill(0).map((_, j) => i === j ? C : 0)
-            );
-            // This inversion is the bottleneck and numerically sensitive.
-            // A proper library (e.g., math.js) would be much better here.
-            // For this demo, we'll use a simplified approach that works for well-conditioned matrices.
-            try {
-                // Using a simplified numeric.js-style inverse for demonstration
-                const term = mat.add(HtH, identity);
-                const term_inv = numeric.inv(term);
-                const H_pseudo_inv = mat.dot(term_inv, Ht);
-                return mat.dot(H_pseudo_inv, T_train);
-            } catch (e) {
-                log("Error in matrix inversion. The matrix might be singular. Using a simpler pseudoinverse.", "error");
-                // Fallback for demo purposes
-                const H_pseudo_inv = mat.dot(numeric.inv(HtH), Ht);
-                return mat.dot(H_pseudo_inv, T_train);
-            }
+            const identity = numeric.identity(HtH.length);
+            const term = mat.add(HtH, numeric.mul(identity, C));
+            const term_inv = mat.inv(term);
+            const H_pseudo_inv = mat.dot(term_inv, Ht);
+            return mat.dot(H_pseudo_inv, T_train);
         }
 
-        // --- Experiment Runners ---
-        function runDownsamplingExperiment(data, activationFunc, numHiddenNeurons) {
-            // Simplified downsampling by random pixel selection (instead of PCA)
+        function runDownsamplingExperiment(data, activationFuncName, numHiddenNeurons) {
+            const activationFunc = ACTIVATION_FUNCTIONS[activationFuncName];
             const n_components = 50;
-            const pixel_indices = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, n_components);
+            // Simplified downsampling (random pixel selection)
+            const pixel_indices = data.pixel_indices_downsampling;
 
             const x_train_downsampled = data.trainImages.map(img => pixel_indices.map(i => img[i]));
             const x_test_downsampled = data.testImages.map(img => pixel_indices.map(i => img[i]));
 
             const input_size = n_components;
-            const input_weights = Array(input_size).fill(0).map(() => Array(numHiddenNeurons).fill(0).map(() => Math.random() * 2 - 1));
-            const biases = Array(numHiddenNeurons).fill(0).map(() => Math.random() * 2 - 1);
+            const input_weights = data.random_weights.downsampling_input;
+            const biases = data.random_weights.downsampling_biases;
 
+            self.postMessage({ type: 'status', message: 'Building H matrix...' });
             const H_train = x_train_downsampled.map(sample => {
                 const hidden_vals = Array(numHiddenNeurons).fill(0);
                 for (let j = 0; j < numHiddenNeurons; j++) {
@@ -276,10 +160,12 @@
                 return hidden_vals;
             });
 
+            self.postMessage({ type: 'status', message: 'Calculating output weights...' });
             const beta = calculate_output_weights(H_train, data.T_train);
 
+            self.postMessage({ type: 'status', message: 'Making predictions...' });
             const H_test = x_test_downsampled.map(sample => {
-                const hidden_vals = Array(numHiddenNeurons).fill(0);
+                 const hidden_vals = Array(numHiddenNeurons).fill(0);
                 for (let j = 0; j < numHiddenNeurons; j++) {
                     let sum = biases[j];
                     for (let i = 0; i < input_size; i++) {
@@ -301,15 +187,16 @@
             return { accuracy: (correct / data.testLabels.length) * 100, y_pred };
         }
 
-        function runUpsamplingExperiment(data, activationFunc, upsamplingFactor) {
+        function runUpsamplingExperiment(data, activationFuncName, upsamplingFactor) {
+            const activationFunc = ACTIVATION_FUNCTIONS[activationFuncName];
             const n_pixels = 15;
-            const pixel_indices = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, n_pixels);
+            const pixel_indices = data.pixel_indices_upsampling;
 
             const x_train_pixels = data.trainImages.map(img => pixel_indices.map(i => img[i]));
             const x_test_pixels = data.testImages.map(img => pixel_indices.map(i => img[i]));
 
-            const upsampling_weights = Array(upsamplingFactor).fill(0).map(() => Math.random() * 2 - 1);
-            const upsampling_biases = Array(upsamplingFactor).fill(0).map(() => Math.random() * 2 - 1);
+            const upsampling_weights = data.random_weights.upsampling_weights;
+            const upsampling_biases = data.random_weights.upsampling_biases;
 
             const temporal_upsampler = (pixel_vector) => {
                 let expanded = [];
@@ -320,8 +207,13 @@
                 return expanded;
             };
 
+            self.postMessage({ type: 'status', message: 'Building H matrix...' });
             const H_train = x_train_pixels.map(temporal_upsampler);
+
+            self.postMessage({ type: 'status', message: 'Calculating output weights...' });
             const beta = calculate_output_weights(H_train, data.T_train);
+
+            self.postMessage({ type: 'status', message: 'Making predictions...' });
             const H_test = x_test_pixels.map(temporal_upsampler);
 
             const T_pred = mat.dot(H_test, beta);
@@ -333,6 +225,125 @@
             });
 
             return { accuracy: (correct / data.testLabels.length) * 100, y_pred };
+        }
+
+        self.onmessage = (e) => {
+            const { type, params, data } = e.data;
+            let result;
+            if (type === 'downsampling') {
+                result = runDownsamplingExperiment(data, params.activationFunc, params.numHiddenNeurons);
+            } else if (type === 'upsampling') {
+                result = runUpsamplingExperiment(data, params.activationFunc, params.upsamplingFactor);
+            }
+            // Send the final result back to the main thread
+            self.postMessage({ type: 'result', result });
+        };
+    </script>
+
+    <script type="module">
+        // --- Main UI Thread Code ---
+
+        // --- UI Elements ---
+        const experimentTypeSelect = document.getElementById('experimentType');
+        const activationFunctionSelect = document.getElementById('activationFunction');
+        const hiddenNeuronsSlider = document.getElementById('hiddenNeurons');
+        const upsamplingFactorSlider = document.getElementById('upsamplingFactor');
+        const neuronsValueSpan = document.getElementById('neurons-value');
+        const upsamplingValueSpan = document.getElementById('upsampling-value');
+        const runExperimentBtn = document.getElementById('runExperiment');
+        const neuronsControl = document.getElementById('neurons-control');
+        const upsamplingControl = document.getElementById('upsampling-control');
+        const loader = document.getElementById('loader-container');
+        const loaderText = document.getElementById('loader-text');
+        const resultsLog = document.getElementById('results-log');
+        const predictedLabelSpan = document.getElementById('predictedLabel');
+        const actualLabelSpan = document.getElementById('actualLabel');
+        const digitCanvas = document.getElementById('digitCanvas');
+        const digitCtx = digitCanvas.getContext('2d');
+
+        // --- Chart.js Setup ---
+        const chartCtx = document.getElementById('accuracyChart').getContext('2d');
+        let accuracyChart = new Chart(chartCtx, {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Test Accuracy', data: [], backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 }] },
+            options: {
+                scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Accuracy (%)' } } },
+                responsive: true,
+                plugins: { legend: { display: false }, title: { display: true, text: 'Experiment Results' } }
+            }
+        });
+
+        // --- Data and Worker Setup ---
+        let mnistData = null;
+        let elmWorker = null;
+
+        // Create a worker from the script tag
+        const workerScript = document.getElementById('worker').textContent;
+        const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
+        elmWorker = new Worker(URL.createObjectURL(workerBlob));
+
+        elmWorker.onmessage = (e) => {
+            const { type, result, message } = e.data;
+            if (type === 'status') {
+                log(message);
+                loaderText.textContent = message;
+            } else if (type === 'result') {
+                const expType = experimentTypeSelect.value;
+                let label;
+                if (expType === 'downsampling') {
+                    label = `${hiddenNeuronsSlider.value} neurons`;
+                } else {
+                    const totalFeatures = 15 * parseInt(upsamplingFactorSlider.value);
+                    label = `Factor ${upsamplingFactorSlider.value} (${totalFeatures} features)`;
+                }
+                updateChart(label, result.accuracy);
+                log(`Result: ${result.accuracy.toFixed(2)}% accuracy.`);
+
+                // Visualize a random prediction
+                const randomIndex = Math.floor(Math.random() * mnistData.test_images.length);
+                drawDigit(mnistData.test_images[randomIndex].map(p => p * 255));
+                predictedLabelSpan.textContent = result.y_pred[randomIndex];
+                actualLabelSpan.textContent = mnistData.test_labels[randomIndex];
+
+                loader.classList.add('hidden');
+                runExperimentBtn.disabled = false;
+                runExperimentBtn.textContent = 'Run Experiment';
+            }
+        };
+
+        async function loadData() {
+            try {
+                const response = await fetch('./mnist_subset.json');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}.`);
+                mnistData = await response.json();
+                log("Local MNIST data loaded successfully.");
+            } catch (error) {
+                log(`Error loading local data: ${error.message}`, 'error');
+                log("Please ensure 'mnist_subset.json' exists in the same folder as your index.html.", 'error');
+            }
+        }
+
+        function getPreparedData() {
+            const trainImages = mnistData.train_images.map(img => img.map(p => p / 255.0));
+            const testImages = mnistData.test_images.map(img => img.map(p => p / 255.0));
+            const trainLabels = mnistData.train_labels;
+            const testLabels = mnistData.test_labels;
+            const T_train = trainLabels.map(label => {
+                const arr = Array(10).fill(0);
+                arr[label] = 1;
+                return arr;
+            });
+            return { trainImages, T_train, testImages, testLabels };
+        }
+
+        function generateRandomWeights() {
+            // Pre-generate all random numbers needed to ensure consistency between runs
+            return {
+                downsampling_input: Array(50).fill(0).map(() => Array(2000).fill(0).map(() => Math.random() * 2 - 1)),
+                downsampling_biases: Array(2000).fill(0).map(() => Math.random() * 2 - 1),
+                upsampling_weights: Array(128).fill(0).map(() => Math.random() * 2 - 1),
+                upsampling_biases: Array(128).fill(0).map(() => Math.random() * 2 - 1),
+            };
         }
 
         // --- UI Logic ---
@@ -371,7 +382,7 @@
             digitCtx.clearRect(0, 0, 140, 140);
             for (let y = 0; y < 28; y++) {
                 for (let x = 0; x < 28; x++) {
-                    const pixelValue = imageVector[y * 28 + x] * 255;
+                    const pixelValue = imageVector[y * 28 + x];
                     digitCtx.fillStyle = `rgb(${pixelValue}, ${pixelValue}, ${pixelValue})`;
                     digitCtx.fillRect(x * 5, y * 5, 5, 5);
                 }
@@ -385,42 +396,28 @@
             }
 
             loader.classList.remove('hidden');
+            loaderText.textContent = 'Preparing data...';
             runExperimentBtn.disabled = true;
             runExperimentBtn.textContent = 'Running...';
             clearChart();
             resultsLog.innerHTML = '';
 
-            await new Promise(resolve => setTimeout(resolve, 50)); // Allow UI to update
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             const data = getPreparedData();
-            const activationFunc = ACTIVATION_FUNCTIONS[activationFunctionSelect.value];
-            const expType = experimentTypeSelect.value;
+            const params = {
+                activationFunc: activationFunctionSelect.value,
+                numHiddenNeurons: parseInt(hiddenNeuronsSlider.value),
+                upsamplingFactor: parseInt(upsamplingFactorSlider.value),
+            };
 
-            log(`Starting ${expType} experiment with ${activationFunctionSelect.value} activation.`);
+            // Pre-generate random indices/weights to pass to the worker
+            data.pixel_indices_downsampling = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 50);
+            data.pixel_indices_upsampling = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 15);
+            data.random_weights = generateRandomWeights();
 
-            let result;
-            if (expType === 'downsampling') {
-                const numHiddenNeurons = parseInt(hiddenNeuronsSlider.value);
-                result = runDownsamplingExperiment(data, activationFunc, numHiddenNeurons);
-                updateChart(`${numHiddenNeurons} neurons`, result.accuracy);
-                log(`Result: ${result.accuracy.toFixed(2)}% accuracy.`);
-            } else {
-                const upsamplingFactor = parseInt(upsamplingFactorSlider.value);
-                result = runUpsamplingExperiment(data, activationFunc, upsamplingFactor);
-                const totalFeatures = 15 * upsamplingFactor;
-                updateChart(`Factor ${upsamplingFactor} (${totalFeatures} features)`, result.accuracy);
-                log(`Result: ${result.accuracy.toFixed(2)}% accuracy.`);
-            }
-
-            // Visualize a random prediction
-            const randomIndex = Math.floor(Math.random() * data.testImages.length);
-            drawDigit(data.testImages[randomIndex]);
-            predictedLabelSpan.textContent = result.y_pred[randomIndex];
-            actualLabelSpan.textContent = data.testLabels[randomIndex];
-
-            loader.classList.add('hidden');
-            runExperimentBtn.disabled = false;
-            runExperimentBtn.textContent = 'Run Experiment';
+            log(`Starting ${experimentTypeSelect.value} experiment...`);
+            elmWorker.postMessage({ type: experimentTypeSelect.value, params, data });
         }
 
         // --- Event Listeners ---
@@ -431,14 +428,7 @@
 
         // --- Initial Load ---
         toggleControls();
-        // A simple numeric library for matrix inversion (for demo purposes)
-        const numericScript = document.createElement('script');
-        numericScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js';
-        numericScript.onload = () => {
-            log("Numeric library loaded.");
-            loadData();
-        };
-        document.head.appendChild(numericScript);
+        loadData();
     </script>
 </body>
 </html>

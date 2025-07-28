@@ -21,6 +21,8 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .pixel { width: 4px; height: 4px; background-color: #374151; border-radius: 1px; }
+        .feature { width: 6px; height: 12px; background-color: #3b82f6; border-radius: 2px; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -32,7 +34,6 @@
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Controls Panel -->
             <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg">
                 <h2 class="text-2xl font-bold mb-6 border-b pb-4">Experiment Controls</h2>
 
@@ -68,7 +69,7 @@
 
                 <div class="mt-8">
                     <button id="runExperiment" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                        Run Experiment
+                        Run and Compare
                     </button>
                 </div>
 
@@ -78,17 +79,14 @@
                 </div>
             </div>
 
-            <!-- Results and Visualization Panel -->
             <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
-                <h2 class="text-2xl font-bold mb-6 border-b pb-4">Results</h2>
+                <h2 class="text-2xl font-bold mb-6 border-b pb-4">Results Comparison</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    <!-- Chart -->
                     <div>
                         <canvas id="accuracyChart"></canvas>
                     </div>
-                    <!-- Sample Prediction -->
                     <div class="text-center">
-                        <h3 class="text-xl font-semibold mb-4">Sample Prediction</h3>
+                        <h3 class="text-xl font-semibold mb-4">Sample Prediction (from Experiment)</h3>
                         <canvas id="digitCanvas" width="140" height="140" class="mx-auto bg-gray-900 rounded-lg shadow-inner"></canvas>
                         <p class="mt-4 text-lg">Predicted Label: <span id="predictedLabel" class="font-bold text-2xl text-blue-600">N/A</span></p>
                         <p class="text-md">Actual Label: <span id="actualLabel" class="font-bold text-xl text-gray-700">N/A</span></p>
@@ -99,30 +97,65 @@
                 </div>
             </div>
         </div>
+
+        <div class="mt-8 bg-white p-6 rounded-2xl shadow-lg">
+            <h2 class="text-2xl font-bold mb-6 border-b pb-4">Visual Explanation of Concepts</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 text-center">1. Input Downsampling</h3>
+                    <div class="flex items-center justify-center space-x-4">
+                        <div class="text-center">
+                            <div class="w-20 h-20 grid grid-cols-7 gap-px p-2 border rounded-md">
+                                <script>
+                                    const digit_map = [0,1,1,1,1,1,0, 0,0,0,0,1,0,0, 0,1,1,1,1,0,0, 0,1,0,0,0,1,0, 0,0,1,1,1,1,0, 0,0,0,0,1,0,0, 0,1,1,1,1,0,0];
+                                    digit_map.forEach(p => document.write(`<div class="w-2 h-2 ${p ? 'bg-gray-700' : 'bg-gray-200'}"></div>`));
+                                </script>
+                            </div>
+                            <p class="mt-2 font-medium">Full Image<br>(784 pixels)</p>
+                        </div>
+                        <div class="text-5xl font-light text-gray-400">&rarr;</div>
+                        <div class="text-center">
+                            <div class="w-20 h-20 flex flex-wrap items-center justify-center gap-2 p-2 border border-dashed rounded-md">
+                                <script>
+                                    for(let i=0; i<15; i++) document.write('<div class="pixel"></div>');
+                                </script>
+                            </div>
+                             <p class="mt-2 font-medium">Reduced Features<br>(e.g., 15-50)</p>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-gray-600 text-sm">The full 784-pixel image is reduced to a small set of its most informative features. This is the input to the ELM.</p>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-4 text-center">2. Temporal Upsampling</h3>
+                    <div class="flex items-center justify-center space-x-4">
+                        <div class="text-center">
+                            <div class="w-20 h-20 flex items-center justify-center border border-dashed rounded-md">
+                                <div class="pixel"></div>
+                            </div>
+                            <p class="mt-2 font-medium">1 Input Feature</p>
+                        </div>
+                        <div class="text-5xl font-light text-gray-400">&rarr;</div>
+                        <div class="text-center">
+                            <div class="w-20 h-20 flex flex-wrap items-center justify-center gap-1 p-2 border border-dashed rounded-md">
+                                 <script>
+                                    for(let i=0; i<32; i++) document.write('<div class="feature"></div>');
+                                </script>
+                            </div>
+                            <p class="mt-2 font-medium">Feature Vector<br>(e.g., 32 new features)</p>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-gray-600 text-sm">Each single input feature is nonlinearly expanded into a larger vector of new features, creating the final high-dimensional space.</p>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <!-- This script tag contains the code for our Web Worker. -->
-    <!-- In a real project, this would be in a separate worker.js file. -->
     <script id="worker" type="javascript/worker">
-        // --- Web Worker Code ---
-        // This code runs in a separate thread and does all the heavy lifting.
-
-        // We need to import the numeric library inside the worker
         self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js');
 
-        const mat = {
-            dot: (A, B) => numeric.dot(A, B),
-            transpose: (A) => numeric.transpose(A),
-            add: (A, B) => numeric.add(A, B),
-            inv: (A) => numeric.inv(A)
-        };
-
-        const ACTIVATION_FUNCTIONS = {
-            sigmoid: (x) => 1 / (1 + Math.exp(-x)),
-            tanh: (x) => Math.tanh(x),
-            relu: (x) => Math.max(0, x),
-            gaussian: (x) => Math.exp(-x * x)
-        };
+        const mat = { dot: (A, B) => numeric.dot(A, B), transpose: (A) => numeric.transpose(A), add: (A, B) => numeric.add(A, B), inv: (A) => numeric.inv(A) };
+        const ACTIVATION_FUNCTIONS = { sigmoid: (x) => 1 / (1 + Math.exp(-x)), tanh: (x) => Math.tanh(x), relu: (x) => Math.max(0, x), gaussian: (x) => Math.exp(-x * x) };
 
         function calculate_output_weights(H, T_train, C = 1e-5) {
             const Ht = mat.transpose(H);
@@ -134,116 +167,87 @@
             return mat.dot(H_pseudo_inv, T_train);
         }
 
-        function runDownsamplingExperiment(data, activationFuncName, numHiddenNeurons) {
+        function runExperiment(data, params) {
+            const { type, activationFuncName, numHiddenNeurons, upsamplingFactor } = params;
             const activationFunc = ACTIVATION_FUNCTIONS[activationFuncName];
-            const n_components = 50;
-            // Simplified downsampling (random pixel selection)
-            const pixel_indices = data.pixel_indices_downsampling;
-
-            const x_train_downsampled = data.trainImages.map(img => pixel_indices.map(i => img[i]));
-            const x_test_downsampled = data.testImages.map(img => pixel_indices.map(i => img[i]));
-
-            const input_size = n_components;
-            const input_weights = data.random_weights.downsampling_input;
-            const biases = data.random_weights.downsampling_biases;
+            let H_train, H_test, y_pred;
 
             self.postMessage({ type: 'status', message: 'Building H matrix...' });
-            const H_train = x_train_downsampled.map(sample => {
-                const hidden_vals = Array(numHiddenNeurons).fill(0);
-                for (let j = 0; j < numHiddenNeurons; j++) {
-                    let sum = biases[j];
-                    for (let i = 0; i < input_size; i++) {
-                        sum += sample[i] * input_weights[i][j];
+
+            if (type === 'baseline' || type === 'downsampling') {
+                const n_components = (type === 'baseline') ? 784 : 50;
+                const pixel_indices = (type === 'baseline') ? data.pixel_indices.baseline : data.pixel_indices.downsampling;
+
+                const x_train_input = data.trainImages.map(img => pixel_indices.map(i => img[i]));
+                const x_test_input = data.testImages.map(img => pixel_indices.map(i => img[i]));
+
+                const input_weights = data.random_weights[type].input;
+                const biases = data.random_weights[type].biases;
+
+                H_train = x_train_input.map(sample => {
+                    const hidden_vals = Array(numHiddenNeurons).fill(0);
+                    for (let j = 0; j < numHiddenNeurons; j++) {
+                        let sum = biases[j];
+                        for (let i = 0; i < n_components; i++) { sum += sample[i] * input_weights[i][j]; }
+                        hidden_vals[j] = activationFunc(sum);
                     }
-                    hidden_vals[j] = activationFunc(sum);
-                }
-                return hidden_vals;
-            });
-
-            self.postMessage({ type: 'status', message: 'Calculating output weights...' });
-            const beta = calculate_output_weights(H_train, data.T_train);
-
-            self.postMessage({ type: 'status', message: 'Making predictions...' });
-            const H_test = x_test_downsampled.map(sample => {
-                 const hidden_vals = Array(numHiddenNeurons).fill(0);
-                for (let j = 0; j < numHiddenNeurons; j++) {
-                    let sum = biases[j];
-                    for (let i = 0; i < input_size; i++) {
-                        sum += sample[i] * input_weights[i][j];
-                    }
-                    hidden_vals[j] = activationFunc(sum);
-                }
-                return hidden_vals;
-            });
-
-            const T_pred = mat.dot(H_test, beta);
-            const y_pred = T_pred.map(row => row.indexOf(Math.max(...row)));
-
-            let correct = 0;
-            y_pred.forEach((pred, i) => {
-                if (pred === data.testLabels[i]) correct++;
-            });
-
-            return { accuracy: (correct / data.testLabels.length) * 100, y_pred };
-        }
-
-        function runUpsamplingExperiment(data, activationFuncName, upsamplingFactor) {
-            const activationFunc = ACTIVATION_FUNCTIONS[activationFuncName];
-            const n_pixels = 15;
-            const pixel_indices = data.pixel_indices_upsampling;
-
-            const x_train_pixels = data.trainImages.map(img => pixel_indices.map(i => img[i]));
-            const x_test_pixels = data.testImages.map(img => pixel_indices.map(i => img[i]));
-
-            const upsampling_weights = data.random_weights.upsampling_weights;
-            const upsampling_biases = data.random_weights.upsampling_biases;
-
-            const temporal_upsampler = (pixel_vector) => {
-                let expanded = [];
-                pixel_vector.forEach(p => {
-                    const features = upsampling_weights.map((w, i) => activationFunc(p * w + upsampling_biases[i]));
-                    expanded = expanded.concat(features);
+                    return hidden_vals;
                 });
-                return expanded;
-            };
 
-            self.postMessage({ type: 'status', message: 'Building H matrix...' });
-            const H_train = x_train_pixels.map(temporal_upsampler);
+                 H_test = x_test_input.map(sample => {
+                    const hidden_vals = Array(numHiddenNeurons).fill(0);
+                    for (let j = 0; j < numHiddenNeurons; j++) {
+                        let sum = biases[j];
+                        for (let i = 0; i < n_components; i++) { sum += sample[i] * input_weights[i][j]; }
+                        hidden_vals[j] = activationFunc(sum);
+                    }
+                    return hidden_vals;
+                });
+
+            } else if (type === 'upsampling') {
+                const n_pixels = 15;
+                const pixel_indices = data.pixel_indices.upsampling;
+                const x_train_pixels = data.trainImages.map(img => pixel_indices.map(i => img[i]));
+                const x_test_pixels = data.testImages.map(img => pixel_indices.map(i => img[i]));
+
+                const upsampling_weights = data.random_weights.upsampling.weights;
+                const upsampling_biases = data.random_weights.upsampling.biases;
+
+                const temporal_upsampler = (pixel_vector) => {
+                    let expanded = [];
+                    pixel_vector.forEach(p => {
+                        const features = upsampling_weights.map((w, i) => activationFunc(p * w + upsampling_biases[i]));
+                        expanded = expanded.concat(features);
+                    });
+                    return expanded;
+                };
+
+                H_train = x_train_pixels.map(temporal_upsampler);
+                H_test = x_test_pixels.map(temporal_upsampler);
+            }
 
             self.postMessage({ type: 'status', message: 'Calculating output weights...' });
             const beta = calculate_output_weights(H_train, data.T_train);
 
             self.postMessage({ type: 'status', message: 'Making predictions...' });
-            const H_test = x_test_pixels.map(temporal_upsampler);
-
             const T_pred = mat.dot(H_test, beta);
-            const y_pred = T_pred.map(row => row.indexOf(Math.max(...row)));
+            y_pred = T_pred.map(row => row.indexOf(Math.max(...row)));
 
             let correct = 0;
-            y_pred.forEach((pred, i) => {
-                if (pred === data.testLabels[i]) correct++;
-            });
+            y_pred.forEach((pred, i) => { if (pred === data.testLabels[i]) correct++; });
 
             return { accuracy: (correct / data.testLabels.length) * 100, y_pred };
         }
 
         self.onmessage = (e) => {
-            const { type, params, data } = e.data;
-            let result;
-            if (type === 'downsampling') {
-                result = runDownsamplingExperiment(data, params.activationFunc, params.numHiddenNeurons);
-            } else if (type === 'upsampling') {
-                result = runUpsamplingExperiment(data, params.activationFunc, params.upsamplingFactor);
-            }
-            // Send the final result back to the main thread
-            self.postMessage({ type: 'result', result });
+            const { params, data } = e.data;
+            const result = runExperiment(data, params);
+            self.postMessage({ type: 'result', result, original_type: params.type });
         };
     </script>
 
     <script type="module">
         // --- Main UI Thread Code ---
-
-        // --- UI Elements ---
         const experimentTypeSelect = document.getElementById('experimentType');
         const activationFunctionSelect = document.getElementById('activationFunction');
         const hiddenNeuronsSlider = document.getElementById('hiddenNeurons');
@@ -265,49 +269,53 @@
         const chartCtx = document.getElementById('accuracyChart').getContext('2d');
         let accuracyChart = new Chart(chartCtx, {
             type: 'bar',
-            data: { labels: [], datasets: [{ label: 'Test Accuracy', data: [], backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 }] },
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Baseline (All Pixels)', data: [], backgroundColor: 'rgba(107, 114, 128, 0.5)', borderColor: 'rgba(107, 114, 128, 1)', borderWidth: 1 },
+                    { label: 'Experiment', data: [], backgroundColor: 'rgba(59, 130, 246, 0.5)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 }
+                ]
+            },
             options: {
                 scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Accuracy (%)' } } },
                 responsive: true,
-                plugins: { legend: { display: false }, title: { display: true, text: 'Experiment Results' } }
+                plugins: { title: { display: true, text: 'Experiment vs. Baseline' } }
             }
         });
 
-        // --- Data and Worker Setup ---
         let mnistData = null;
         let elmWorker = null;
 
-        // Create a worker from the script tag
         const workerScript = document.getElementById('worker').textContent;
         const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
         elmWorker = new Worker(URL.createObjectURL(workerBlob));
 
         elmWorker.onmessage = (e) => {
-            const { type, result, message } = e.data;
+            const { type, result, message, original_type } = e.data;
             if (type === 'status') {
                 log(message);
                 loaderText.textContent = message;
             } else if (type === 'result') {
-                const expType = experimentTypeSelect.value;
-                let label;
-                if (expType === 'downsampling') {
-                    label = `${hiddenNeuronsSlider.value} neurons`;
+                 if(original_type === 'baseline'){
+                    accuracyChart.data.datasets[0].data.push(result.accuracy);
+                    log(`Baseline Result: ${result.accuracy.toFixed(2)}% accuracy.`);
                 } else {
-                    const totalFeatures = 15 * parseInt(upsamplingFactorSlider.value);
-                    label = `Factor ${upsamplingFactorSlider.value} (${totalFeatures} features)`;
+                    accuracyChart.data.datasets[1].data.push(result.accuracy);
+                    log(`Experiment Result: ${result.accuracy.toFixed(2)}% accuracy.`);
+                     // Visualize a random prediction from the main experiment
+                    const randomIndex = Math.floor(Math.random() * mnistData.test_images.length);
+                    drawDigit(mnistData.test_images[randomIndex].map(p => p * 255));
+                    predictedLabelSpan.textContent = result.y_pred[randomIndex];
+                    actualLabelSpan.textContent = mnistData.test_labels[randomIndex];
                 }
-                updateChart(label, result.accuracy);
-                log(`Result: ${result.accuracy.toFixed(2)}% accuracy.`);
+                accuracyChart.update();
 
-                // Visualize a random prediction
-                const randomIndex = Math.floor(Math.random() * mnistData.test_images.length);
-                drawDigit(mnistData.test_images[randomIndex].map(p => p * 255));
-                predictedLabelSpan.textContent = result.y_pred[randomIndex];
-                actualLabelSpan.textContent = mnistData.test_labels[randomIndex];
-
-                loader.classList.add('hidden');
-                runExperimentBtn.disabled = false;
-                runExperimentBtn.textContent = 'Run Experiment';
+                // Check if both experiments are done
+                if (accuracyChart.data.datasets[0].data.length === accuracyChart.data.datasets[1].data.length) {
+                    loader.classList.add('hidden');
+                    runExperimentBtn.disabled = false;
+                    runExperimentBtn.textContent = 'Run and Compare';
+                }
             }
         };
 
@@ -336,25 +344,22 @@
             return { trainImages, T_train, testImages, testLabels };
         }
 
-        function generateRandomWeights() {
-            // Pre-generate all random numbers needed to ensure consistency between runs
+        function generateRandomWeights(maxNeurons, maxFactor) {
+            // Pre-generate all random numbers needed to ensure consistency
             return {
-                downsampling_input: Array(50).fill(0).map(() => Array(2000).fill(0).map(() => Math.random() * 2 - 1)),
-                downsampling_biases: Array(2000).fill(0).map(() => Math.random() * 2 - 1),
-                upsampling_weights: Array(128).fill(0).map(() => Math.random() * 2 - 1),
-                upsampling_biases: Array(128).fill(0).map(() => Math.random() * 2 - 1),
+                baseline: {
+                    input: Array(784).fill(0).map(() => Array(maxNeurons).fill(0).map(() => Math.random() * 2 - 1)),
+                    biases: Array(maxNeurons).fill(0).map(() => Math.random() * 2 - 1)
+                },
+                downsampling: {
+                    input: Array(50).fill(0).map(() => Array(maxNeurons).fill(0).map(() => Math.random() * 2 - 1)),
+                    biases: Array(maxNeurons).fill(0).map(() => Math.random() * 2 - 1)
+                },
+                upsampling: {
+                    weights: Array(maxFactor).fill(0).map(() => Math.random() * 2 - 1),
+                    biases: Array(maxFactor).fill(0).map(() => Math.random() * 2 - 1)
+                }
             };
-        }
-
-        // --- UI Logic ---
-        function toggleControls() {
-            if (experimentTypeSelect.value === 'downsampling') {
-                neuronsControl.style.display = 'block';
-                upsamplingControl.style.display = 'none';
-            } else {
-                neuronsControl.style.display = 'none';
-                upsamplingControl.style.display = 'block';
-            }
         }
 
         function log(message, type = 'info') {
@@ -366,15 +371,9 @@
             resultsLog.scrollTop = resultsLog.scrollHeight;
         }
 
-        function updateChart(label, data) {
-            accuracyChart.data.labels.push(label);
-            accuracyChart.data.datasets[0].data.push(data);
-            accuracyChart.update();
-        }
-
         function clearChart() {
             accuracyChart.data.labels = [];
-            accuracyChart.data.datasets[0].data = [];
+            accuracyChart.data.datasets.forEach(dataset => dataset.data = []);
             accuracyChart.update();
         }
 
@@ -390,10 +389,7 @@
         }
 
         async function handleRunExperiment() {
-            if (!mnistData) {
-                log("Data not loaded yet. Please wait.", "error");
-                return;
-            }
+            if (!mnistData) { log("Data not loaded yet. Please wait.", "error"); return; }
 
             loader.classList.remove('hidden');
             loaderText.textContent = 'Preparing data...';
@@ -405,30 +401,58 @@
             await new Promise(resolve => setTimeout(resolve, 50));
 
             const data = getPreparedData();
+            const expType = experimentTypeSelect.value;
             const params = {
-                activationFunc: activationFunctionSelect.value,
+                activationFuncName: activationFunctionSelect.value,
                 numHiddenNeurons: parseInt(hiddenNeuronsSlider.value),
                 upsamplingFactor: parseInt(upsamplingFactorSlider.value),
             };
 
-            // Pre-generate random indices/weights to pass to the worker
-            data.pixel_indices_downsampling = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 50);
-            data.pixel_indices_upsampling = Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 15);
-            data.random_weights = generateRandomWeights();
+            const label = expType === 'downsampling' ? `${params.numHiddenNeurons} neurons` : `Factor ${params.upsamplingFactor}`;
+            accuracyChart.data.labels = [label];
 
-            log(`Starting ${experimentTypeSelect.value} experiment...`);
-            elmWorker.postMessage({ type: experimentTypeSelect.value, params, data });
+            data.pixel_indices = {
+                baseline: Array.from({length: 784}, (_, i) => i),
+                downsampling: Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 50),
+                upsampling: Array.from({length: 784}, (_, i) => i).sort(() => 0.5 - Math.random()).slice(0, 15)
+            };
+            data.random_weights = generateRandomWeights(2000, 128);
+
+            // Run Baseline Experiment
+            log(`Starting Baseline (all pixels) experiment...`);
+            const baselineParams = {...params, type: 'baseline'};
+            elmWorker.postMessage({ params: baselineParams, data });
+
+            // Run Selected Experiment
+            log(`Starting ${expType} experiment...`);
+            const experimentParams = {...params, type: expType};
+            elmWorker.postMessage({ params: experimentParams, data });
         }
 
-        // --- Event Listeners ---
-        experimentTypeSelect.addEventListener('change', toggleControls);
+        // --- Event Listeners and Initial Load ---
+        experimentTypeSelect.addEventListener('change', () => {
+             if (experimentTypeSelect.value === 'downsampling') {
+                neuronsControl.style.display = 'block';
+                upsamplingControl.style.display = 'none';
+            } else {
+                neuronsControl.style.display = 'none';
+                upsamplingControl.style.display = 'block';
+            }
+        });
         hiddenNeuronsSlider.addEventListener('input', (e) => neuronsValueSpan.textContent = e.target.value);
         upsamplingFactorSlider.addEventListener('input', (e) => upsamplingValueSpan.textContent = e.target.value);
         runExperimentBtn.addEventListener('click', handleRunExperiment);
 
-        // --- Initial Load ---
-        toggleControls();
-        loadData();
+        document.addEventListener('DOMContentLoaded', () => {
+             if (experimentTypeSelect.value === 'downsampling') {
+                neuronsControl.style.display = 'block';
+                upsamplingControl.style.display = 'none';
+            } else {
+                neuronsControl.style.display = 'none';
+                upsamplingControl.style.display = 'block';
+            }
+            loadData();
+        });
     </script>
 </body>
 </html>

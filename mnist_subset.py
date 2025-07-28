@@ -17,8 +17,8 @@ def create_mnist_subset():
     """
     print(f"Attempting to download the gzipped MNIST dataset from:\n{FULL_DATASET_URL}\n")
     # Desired number of samples for our small, fast-loading subset
-    NUM_TRAIN_SAMPLES = 9000
-    NUM_TEST_SAMPLES = 1000
+    NUM_TRAIN_SAMPLES = 1000
+    NUM_TEST_SAMPLES = 100
 
     # Output filename
     OUTPUT_FILENAME = "mnist_subset.json"

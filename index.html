@@ -195,12 +195,19 @@
         // --- Data Loading and Prep ---
         let mnistData = null;
         async function loadData() {
-            // In a real scenario, you'd fetch this. For this demo, we embed a small subset.
-            // This is a highly compressed and reduced version of MNIST for faster demo.
-            // Contains 500 training samples and 100 test samples.
-            const response = await fetch('https://gist.githubusercontent.com/turitsyn/723756243f55930da1742de135546e50/raw/mnist_subset.json');
-            mnistData = await response.json();
-            log("MNIST data loaded.");
+            // This now fetches the data file from the same directory as the index.html
+            // You must create a 'mnist_subset.json' file and place it in your repository.
+            try {
+                const response = await fetch('./mnist_subset.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}. Make sure 'mnist_subset.json' is in your repository.`);
+                }
+                mnistData = await response.json();
+                log("Local MNIST data loaded successfully.");
+            } catch (error) {
+                log(`Error loading local data: ${error.message}`, 'error');
+                log("Please ensure 'mnist_subset.json' exists in the same folder as your index.html on GitHub.", 'error');
+            }
         }
 
         function getPreparedData() {
